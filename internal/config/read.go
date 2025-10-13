@@ -6,13 +6,15 @@ import (
 	"os"
 )
 
+const configFileName = "/.gatorconfig.json"
+
 func GetConfigFilePath() (string, error) {
 	homeDirPath, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	configFilePath := homeDirPath + "/.gatorconfig.json"
-	return  configFilePath, nil
+	configFilePath := homeDirPath + configFileName
+	return configFilePath, nil
 }
 
 func Read() Config {
