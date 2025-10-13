@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 )
 
@@ -11,18 +10,19 @@ type Config struct {
 	CurrentUserName string `json:"current_user_name"`
 }
 
-func (c Config) SetUser(userName string) {
+func (c Config) SetUser(userName string) error {
 	c.CurrentUserName = userName
 	marshaledConfig, err := json.Marshal(c)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	configFilePath, err := GetConfigFilePath()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	err = os.WriteFile(configFilePath, marshaledConfig, 0666)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }
