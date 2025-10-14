@@ -57,7 +57,7 @@ func HandlerRegister(s *State, cmd Command) error {
 		return errors.New("username is required")
 	}
 	dbUser, err := s.Db.CreateUser(context.Background(), database.CreateUserParams{uuid.New(), time.Now(), time.Now(), cmd.Arguments[0]})
-	if err !=  nil {
+	if err != nil {
 		return fmt.Errorf("could not register: %v", err)
 	}
 	err = s.Cfg.SetUser(cmd.Arguments[0])
@@ -65,5 +65,15 @@ func HandlerRegister(s *State, cmd Command) error {
 		return err
 	}
 	fmt.Printf("User has been set!\n%+v", dbUser)
+	return nil
+}
+
+func HandleReset(s *State, cmd Command) error {
+	err := s.Db.Clear(context.Background())
+	if err != nil {
+		return fmt.Errorf("reset failed: %v", err)
+	} else {
+		fmt.Println("Reset successful!")
+	}
 	return nil
 }

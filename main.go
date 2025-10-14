@@ -29,6 +29,7 @@ func main() {
 	newState.Db = dbQueries
 	commands.RegisterNewCommand("login", config.HandlerLogin)
 	commands.RegisterNewCommand("register", config.HandlerRegister)
+	commands.RegisterNewCommand("reset", config.HandleReset)
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)
@@ -41,5 +42,5 @@ func main() {
 		fmt.Printf("An error occurred: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 }
