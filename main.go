@@ -32,6 +32,7 @@ func main() {
 	commands.RegisterNewCommand("reset", config.HandleReset)
 	commands.RegisterNewCommand("users", config.HandleGetAllUsers)
 	commands.RegisterNewCommand("agg", config.HandleAgg)
+	commands.RegisterNewCommand("addfeed", config.HandleAddFeed)
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)

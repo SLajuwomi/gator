@@ -140,9 +140,10 @@ func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	}
 	newRSSFeed.Channel.Title = html.UnescapeString(newRSSFeed.Channel.Title)
 	newRSSFeed.Channel.Description = html.UnescapeString(newRSSFeed.Channel.Description)
-	for _, item := range newRSSFeed.Channel.Item {
+	for i, item := range newRSSFeed.Channel.Item {
 		item.Title = html.UnescapeString(item.Title)
 		item.Description = html.UnescapeString(item.Description)
+		newRSSFeed.Channel.Item[i] = item
 	}
 	return &newRSSFeed, nil
 }
@@ -153,5 +154,21 @@ func HandleAgg(s *State, cmd Command) error {
 		return fmt.Errorf("error occurred running FetchFeed:\n%v", err)
 	}
 	fmt.Printf("%+v", feedStruct)
+	return nil
+}
+
+func HandleAddFeed(s *State, cmd Command) error {
+	if len(cmd.Arguments) < 2 {
+		return fmt.Errorf("not enough arguments. expecting addfeed url_name actual_url")
+	}
+	currentUser, err := s.Db.GetUser(context.Background(), s.Cfg.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("failed getting current user from database: %v", err)
+	}
+	newFeed, err := s.Db.CreateFeed(context.Background(), database.CreateFeedParams{uuid.New(), time.Now(), time.Now(), cmd.Arguments[0], currentUser.ID, cmd.Arguments[1]})
+	if err != nil {
+		return fmt.Errorf("error creating feed: %v", err)
+	}
+	fmt.Printf("Created feed: %+v", newFeed)
 	return nil
 }
