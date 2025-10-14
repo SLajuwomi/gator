@@ -30,6 +30,8 @@ func main() {
 	commands.RegisterNewCommand("login", config.HandlerLogin)
 	commands.RegisterNewCommand("register", config.HandlerRegister)
 	commands.RegisterNewCommand("reset", config.HandleReset)
+	commands.RegisterNewCommand("users", config.HandleGetAllUsers)
+	commands.RegisterNewCommand("agg", config.HandleAgg)
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)

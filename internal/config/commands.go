@@ -2,8 +2,12 @@ package config
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +17,7 @@ import (
 type State struct {
 	Db  *database.Queries
 	Cfg *Config
+	Ctx context.Context
 }
 
 type Command struct {
@@ -22,6 +27,22 @@ type Command struct {
 
 type Commands struct {
 	AllCommands map[string]func(*State, Command) error
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
 }
 
 func (c *Commands) Run(s *State, cmd Command) error {
@@ -42,13 +63,13 @@ func HandlerLogin(s *State, cmd Command) error {
 	}
 	_, err := s.Db.GetUser(context.Background(), cmd.Arguments[0])
 	if err != nil {
-		return fmt.Errorf("user not found in database: %v", err)
+		return fmt.Errorf("user not found in database (maybe try to register first): %v", err)
 	}
 	err = s.Cfg.SetUser(cmd.Arguments[0])
 	if err != nil {
 		return err
 	}
-	fmt.Println("User has been set!")
+	fmt.Printf("%v has been logged in!", cmd.Arguments[0])
 	return nil
 }
 
@@ -75,5 +96,62 @@ func HandleReset(s *State, cmd Command) error {
 	} else {
 		fmt.Println("Reset successful!")
 	}
+	return nil
+}
+
+func HandleGetAllUsers(s *State, cmd Command) error {
+	dbUsers, err := s.Db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("error getting all users: %v", err)
+	}
+	for _, user := range dbUsers {
+		if user.Name == s.Cfg.CurrentUserName {
+			fmt.Printf("* %v (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %v\n", user.Name)
+		}
+	}
+	return nil
+}
+
+func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	var newRSSFeed RSSFeed
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new request:\n%v", err)
+	}
+	req.Header.Set("User-Agent", "gator")
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("FetchFeed client sending http request failed:\n%v", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body:\n%v", err)
+	}
+	err = xml.Unmarshal(body, &newRSSFeed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal XML into struct:\n%v", err)
+	}
+	newRSSFeed.Channel.Title = html.UnescapeString(newRSSFeed.Channel.Title)
+	newRSSFeed.Channel.Description = html.UnescapeString(newRSSFeed.Channel.Description)
+	for _, item := range newRSSFeed.Channel.Item {
+		item.Title = html.UnescapeString(item.Title)
+		item.Description = html.UnescapeString(item.Description)
+	}
+	return &newRSSFeed, nil
+}
+
+func HandleAgg(s *State, cmd Command) error {
+	feedStruct, err := FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return fmt.Errorf("error occurred running FetchFeed:\n%v", err)
+	}
+	fmt.Printf("%+v", feedStruct)
 	return nil
 }

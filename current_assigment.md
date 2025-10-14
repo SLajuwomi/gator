@@ -1,101 +1,58 @@
-SQLC
-SQLC is an amazing Go program that generates Go code from SQL queries. It's not exactly an ORM, but rather a tool that makes working with raw SQL easy and type-safe.
+RSS
+The whole point of the gator program is to fetch the RSS feed of a website and store its content in a structured format in our database. That way we can display it nicely in our CLI.
 
-We will use Goose to manage our database migrations (the schema), and SQLC to generate Go code that our application can use to interact with the database (run queries).
+RSS stands for "Really Simple Syndication" and is a way to get the latest content from a website in a structured format. It's fairly ubiquitous on the web: most content sites have an RSS feed.
 
-Assignment
-Install SQLC.
-SQLC is just a command line tool, it's not a package that we need to import. I recommend installing it using go install. Installing Go CLI tools with go install is easy and ensures compatibility with your Go environment.
+Structure of an RSS Feed
+RSS is a specific structure of XML (I know, gross). We will keep it simple and only worry about a few fields. Here's an example of the documents we'll parse:
 
-go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+<channel>
+  <title>RSS Feed Example</title>
+  <link>https://www.example.com</link>
+  <description>This is an example RSS feed</description>
+  <item>
+    <title>First Article</title>
+    <link>https://www.example.com/article1</link>
+    <description>This is the content of the first article.</description>
+    <pubDate>Mon, 06 Sep 2021 12:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Second Article</title>
+    <link>https://www.example.com/article2</link>
+    <description>Here's the content of the second article.</description>
+    <pubDate>Tue, 07 Sep 2021 14:30:00 GMT</pubDate>
+  </item>
+</channel>
+</rss>
 
-Then run sqlc version to make sure it's installed correctly.
+We'll then directly unmarshal this kind of document into structs like this:
 
-Configure SQLC. You'll always run the sqlc command from the root of your project. Create a file called sqlc.yaml in the root of your project. Here is mine:
-version: "2"
-sql:
-  - schema: "sql/schema"
-    queries: "sql/queries"
-    engine: "postgresql"
-    gen:
-      go:
-        out: "internal/database"
-
-We're telling SQLC to look in the sql/schema directory for our schema structure (which is the same set of files that Goose uses, but sqlc automatically ignores "down" migrations), and in the sql/queries directory for queries. We're also telling it to generate Go code in the internal/database directory.
-
-Write a query to create a user. Inside the sql/queries directory, create a file called users.sql. Here's the format:
--- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, name)
-VALUES (
-    $1,
-    $2,
-    $3,
-    $4
-)
-RETURNING *;
-
-$1, $2, $3, and $4 are parameters that we'll be able to pass into the query in our Go code. The :one at the end of the query name tells SQLC that we expect to get back a single row (the created user).
-
-Keep the SQLC postgres docs handy, you'll probably need to refer to them again later.
-
-Generate the Go code. Run sqlc generate from the root of your project. It should create a new package of go code in internal/database. You'll notice that the generated code relies on Google's uuid package, so you'll need to add that to your module:
-go get github.com/google/uuid
-
-Write another query to get a user by name. I used the comment -- name: GetUser :one to tell SQLC that I expect to get back a single row. Again, generate the Go code to ensure that it works.
-Import a PostgreSQL driver.
-We need to add and import a Postgres driver so our program knows how to talk to the database. Install it in your module:
-
-go get github.com/lib/pq
-
-Add this import to the top of your main.go file:
-
-import _ "github.com/lib/pq"
-
-This is one of my least favorite things working with SQL in Go currently. You have to import the driver, but you don't use it directly anywhere in your code. The underscore tells Go that you're importing it for its side effects, not because you need to use it.
-
-Open a connection to the database, and store it in the state struct:
-In main(), load in your database URL to the config struct and sql.Open() a connection to your database:
-
-db, err := sql.Open("postgres", dbURL)
-
-Use your generated database package to create a new *database.Queries, and store it in your state struct:
-
-dbQueries := database.New(db)
-
-type state struct {
-	db  *database.Queries
-	cfg *config.Config
+type RSSFeed struct {
+Channel struct {
+Title string `xml:"title"`
+Link string `xml:"link"`
+Description string `xml:"description"`
+Item []RSSItem `xml:"item"`
+} `xml:"channel"`
 }
 
-Create a register handler and register it with the commands. Usage:
-go run . register lane
+type RSSItem struct {
+Title string `xml:"title"`
+Link string `xml:"link"`
+Description string `xml:"description"`
+PubDate string `xml:"pubDate"`
+}
 
-It should:
+If there are any extra fields in the XML, the parser will just discard them, and if any are missing, the parser will leave them as their zero value.
 
-Ensure that a name was passed in the args.
-Create a new user in the database. It should have access to the CreateUser query through the state -> db struct.
-Pass context.Background() to the query to create an empty Context argument.
-Use the uuid.New() function to generate a new UUID for the user.
-created_at and updated_at should be the current time.
-Use the provided name.
-Exit with code 1 if a user with that name already exists.
-Set the current user in the config to the given name.
-Print a message that the user was created, and log the user's data to the console for your own debugging.
-Test the register command by running it with a name:
-
-go run . register lane
-
-Use psql to verify that the user was created:
-
-Mac: psql postgres
-Linux: sudo -u postgres psql
-\c gator
-
-SELECT * FROM users;
-
-Update the login command handler to error (and exit with code 1) if the given username doesn't exist in the database. You can't login to an account that doesn't exist!
-Take a good look at the tests and run them before submitting.
-
-Be sure to migrate down and back up with goose before each run/submit, because the tests assume a clean database.
-
-Submit the CLI tests after a final down/up migration.
+Assignment
+Write a func fetchFeed(ctx context.Context, feedURL string) (\*RSSFeed, error) function. It should fetch a feed from the given URL, and, assuming that nothing goes wrong, return a filled-out RSSFeed struct. Here are some useful docs (be sure to check the Overviews for examples if the entry lacks any):
+http.NewRequestWithContext
+http.Client.Do
+I set the User-Agent header to gator in the request with request.Header.Set. This is a common practice to identify your program to the server.
+io.ReadAll
+xml.Unmarshal (works the same as json.Unmarshal)
+Use the html.UnescapeString function to decode escaped HTML entities (like &ldquo;). You'll need to run the Title and Description fields (of both the entire channel as well as the items) through this function.
+Add an agg command. Later this will be our long-running aggregator service. For now, we'll just use it to fetch a single feed and ensure our parsing works. It should fetch the feed found at https://www.wagslane.dev/index.xml and print the entire struct to the console.
+Run and submit the CLI tests.
