@@ -1,25 +1,29 @@
-Feeds
-Now that we have a way to fetch feeds from the internet, we need to store them in our database.
+Middleware
+We have 3 command handlers (and we'll add more) that all start by ensuring that a user is logged in.
+
+addfeed
+follow
+following
+They all share this code (or something similar):
+
+user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+if err != nil {
+	return err
+}
+
+Let's create some "middleware" that abstracts this away for us. In addition, if we need to modify this code for any reason later, there will be only one place that must be edited.
+
+Middleware is a way to wrap a function with additional functionality. It is a common pattern that allows us to write DRY code.
 
 Assignment
-Create a feeds table.
-Like any table in our DB, we'll need the standard id, created_at, and updated_at fields. We'll also need a few more:
+Create logged-in middleware. It will allow us to change the function signature of our handlers that require a logged in user to accept a user as an argument and DRY up our code. Here's the function signature of my middleware:
 
-name: The name of the feed (like "The Changelog, or "The Boot.dev Blog")
-url: The URL of the feed
-user_id: The ID of the user who added this feed
-Make the url field unique so that in the future we aren't downloading duplicate posts.
+middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error
 
-Use an ON DELETE CASCADE constraint on the user_id foreign key so that if a user is deleted, all of their feeds are automatically deleted as well. This will ensure we have no orphaned records and that deleting the users in the reset command also deletes all of their feeds.
+You'll notice it's a higher order function that takes a handler of the "logged in" type and returns a "normal" handler that we can register. I used it like this:
 
-Write the appropriate migrations and run them.
+cmds.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 
-Add a new query to create a feed, then use sqlc generate to generate the Go code.
-Add a new command called addfeed. It takes two args:
-name: The name of the feed
-url: The URL of the feed
-At the top of the handler, get the current user from the database and connect the feed to that user.
-
-If everything goes well, print out the fields of the new feed record.
+Test your code before and after this refactor to make sure that everything still works.
 
 Run and submit the CLI tests.

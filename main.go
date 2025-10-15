@@ -32,10 +32,10 @@ func main() {
 	commands.RegisterNewCommand("reset", config.HandleReset)
 	commands.RegisterNewCommand("users", config.HandleGetAllUsers)
 	commands.RegisterNewCommand("agg", config.HandleAgg)
-	commands.RegisterNewCommand("addfeed", config.HandleAddFeed)
+	commands.RegisterNewCommand("addfeed", config.MiddlewareLoggedIn(config.HandleAddFeed))
 	commands.RegisterNewCommand("feeds", config.HandleGetAllFeeds)
-	commands.RegisterNewCommand("follow", config.HandleFeedFollow)
-	commands.RegisterNewCommand("following", config.HandleFollowing)
+	commands.RegisterNewCommand("follow", config.MiddlewareLoggedIn(config.HandleFeedFollow))
+	commands.RegisterNewCommand("following", config.MiddlewareLoggedIn(config.HandleFollowing))
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)
