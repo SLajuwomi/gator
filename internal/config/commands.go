@@ -10,10 +10,10 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/slajuwomi/gator/internal/database"
 )
 
@@ -220,8 +220,7 @@ func scrapeFeeds(s *State) error {
 			FeedID:      nextFeedToFetch.ID,
 		})
 		if err != nil {
-			var pgErr *pq.Error
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 				continue
 			}
 			return fmt.Errorf("error adding posts to database: %v", err)
