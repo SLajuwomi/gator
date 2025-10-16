@@ -36,6 +36,7 @@ func main() {
 	commands.RegisterNewCommand("feeds", config.HandleGetAllFeeds)
 	commands.RegisterNewCommand("follow", config.MiddlewareLoggedIn(config.HandleFeedFollow))
 	commands.RegisterNewCommand("following", config.MiddlewareLoggedIn(config.HandleFollowing))
+	commands.RegisterNewCommand("unfollow", config.MiddlewareLoggedIn(config.HandleUnfollow))
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)

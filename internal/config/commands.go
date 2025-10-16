@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -154,14 +155,42 @@ func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 }
 
 func HandleAgg(s *State, cmd Command) error {
-	feedStruct, err := FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if len(cmd.Arguments) < 1 {
+		return fmt.Errorf("not enough arguments. expecting go run . agg <time_between_reqs>")
+	}
+	timeBetweenReqs, err := time.ParseDuration(cmd.Arguments[0])
+	if err != nil {
+		return fmt.Errorf("failure getting time between requests: %v", err)
+	}
+	fmt.Printf("Collecting feeds every %v\n", cmd.Arguments[0])
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
+}
+
+func scrapeFeeds(s *State) error {
+	nextFeedToFetch, err := s.Db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get next feed to fetch: %v", err)
+	}
+	s.Db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
+		LastFetchedAt: sql.NullTime{
+			Time: time.Now(),
+			Valid: true,
+		},
+		UpdatedAt: time.Now(),
+		ID: nextFeedToFetch.ID,
+	})
+	feedStruct, err := FetchFeed(context.Background(), nextFeedToFetch.Url)
 	if err != nil {
 		return fmt.Errorf("error occurred running FetchFeed:\n%v", err)
 	}
-	fmt.Printf("%+v", feedStruct)
+	for _, item := range feedStruct.Channel.Item {
+		fmt.Printf("* %v\n", item.Title)
+	}
 	return nil
 }
-
 func HandleAddFeed(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 2 {
 		return fmt.Errorf("not enough arguments. expecting addfeed url_name actual_url")
@@ -171,6 +200,7 @@ func HandleAddFeed(s *State, cmd Command, user database.User) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+		LastFetchedAt: sql.NullTime{},
 		Name:      cmd.Arguments[0],
 		UserID:    user.ID,
 		Url:       cmd.Arguments[1]})
@@ -244,6 +274,26 @@ func HandleFollowing(s *State, cmd Command, user database.User) error {
 	fmt.Println("Currently following:")
 	for _, feed := range allFollowing {
 		fmt.Printf("* %v\n", feed.FeedName)
+	}
+	return nil
+}
+
+func HandleUnfollow(s *State, cmd Command, user database.User) error {
+	if len(cmd.Arguments) < 1 {
+		return fmt.Errorf("too few arguments. expected go run . unfollow <feed_url>")
+	}
+	feed, err := s.Db.GetFeedByURL(context.Background(), cmd.Arguments[0])
+	if err != nil {
+		return fmt.Errorf("couldn't get feed with url: %v", err)
+	}
+	err = s.Db.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("error deleting feed follow: %v", err)
+	} else {
+		fmt.Printf("successfully deleted feed follow for %v\n", feed.Url)
 	}
 	return nil
 }
