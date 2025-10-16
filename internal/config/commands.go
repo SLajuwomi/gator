@@ -9,9 +9,11 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/slajuwomi/gator/internal/database"
 )
 
@@ -168,7 +170,23 @@ func HandleAgg(s *State, cmd Command) error {
 		scrapeFeeds(s)
 	}
 }
-
+func parsePublishedAt(s string) (time.Time, error) {
+	var t time.Time
+	var err error
+	layouts := []string{time.RFC1123Z, time.RFC1123, time.RFC850}
+	for _, layout := range layouts {
+		t, err = time.Parse(layout, s)
+		if err == nil {
+			return t, nil
+		} else {
+			fmt.Println("invalid layout")
+		}
+	}
+	if t.IsZero() {
+		return t, fmt.Errorf("no layout matched: %v", err)
+	}
+	return t, nil
+}
 func scrapeFeeds(s *State) error {
 	nextFeedToFetch, err := s.Db.GetNextFeedToFetch(context.Background())
 	if err != nil {
@@ -176,18 +194,38 @@ func scrapeFeeds(s *State) error {
 	}
 	s.Db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
 		LastFetchedAt: sql.NullTime{
-			Time: time.Now(),
+			Time:  time.Now(),
 			Valid: true,
 		},
 		UpdatedAt: time.Now(),
-		ID: nextFeedToFetch.ID,
+		ID:        nextFeedToFetch.ID,
 	})
 	feedStruct, err := FetchFeed(context.Background(), nextFeedToFetch.Url)
 	if err != nil {
 		return fmt.Errorf("error occurred running FetchFeed:\n%v", err)
 	}
 	for _, item := range feedStruct.Channel.Item {
-		fmt.Printf("* %v\n", item.Title)
+		t, err := parsePublishedAt(item.PubDate)
+		if err != nil {
+			return fmt.Errorf("parsePublishedAt failed: %v", err)
+		}
+		_, err = s.Db.CreatePosts(context.Background(), database.CreatePostsParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: t,
+			FeedID:      nextFeedToFetch.ID,
+		})
+		if err != nil {
+			var pgErr *pq.Error
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				continue
+			}
+			return fmt.Errorf("error adding posts to database: %v", err)
+		}
 	}
 	return nil
 }
@@ -195,25 +233,25 @@ func HandleAddFeed(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 2 {
 		return fmt.Errorf("not enough arguments. expecting addfeed url_name actual_url")
 	}
-	
+
 	newFeed, err := s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:            uuid.New(),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 		LastFetchedAt: sql.NullTime{},
-		Name:      cmd.Arguments[0],
-		UserID:    user.ID,
-		Url:       cmd.Arguments[1]})
+		Name:          cmd.Arguments[0],
+		UserID:        user.ID,
+		Url:           cmd.Arguments[1]})
 	if err != nil {
 		return fmt.Errorf("error creating feed: %v", err)
 	}
 	fmt.Printf("Created feed: %+v\n", newFeed)
 	insertFeedFollow, err := s.Db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
-		ID: uuid.New(),
+		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID: user.ID,
-		FeedID: newFeed.ID,
+		UserID:    user.ID,
+		FeedID:    newFeed.ID,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating feed follow while adding feed: %v", err)
@@ -252,17 +290,18 @@ func HandleFeedFollow(s *State, cmd Command, user database.User) error {
 		return fmt.Errorf("error getting feed to follow: %v", err)
 	}
 	insertFeedFollow, err := s.Db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
-		ID: uuid.New(),
+		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID: user.ID,
-		FeedID: feedToFollow.ID,
+		UserID:    user.ID,
+		FeedID:    feedToFollow.ID,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating feed follow: %v", err)
 	}
 	fmt.Printf("Name of Feed: %v\n", insertFeedFollow.FeedName)
 	fmt.Printf("Current user: %v\n", insertFeedFollow.UserName)
+	fmt.Printf("Successfully followed %v\n", insertFeedFollow.FeedName)
 	return nil
 }
 
@@ -293,7 +332,36 @@ func HandleUnfollow(s *State, cmd Command, user database.User) error {
 	if err != nil {
 		return fmt.Errorf("error deleting feed follow: %v", err)
 	} else {
-		fmt.Printf("successfully deleted feed follow for %v\n", feed.Url)
+		fmt.Printf("successfully unfollowed %v\n", feed.Url)
+	}
+	return nil
+}
+
+func HandleBrowse(s *State, cmd Command, user database.User) error {
+	var limit int64
+	limit = 2
+	var err error
+	if len(cmd.Arguments) != 0 {
+		if cmd.Arguments[0] != "" {
+			limit, err = strconv.ParseInt(cmd.Arguments[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to convert to int: %v", err)
+			}
+		}
+	}
+	posts, err := s.Db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("error getting posts for user: %v", err)
+	}
+	fmt.Printf("Found %d posts for user %s:\n", len(posts), user.Name)
+	for _, post := range posts {
+		fmt.Printf("%s from %s\n", post.PublishedAt.Format("Mon Jan 2"), post.FeedName)
+		fmt.Printf("--- %s ---\n", post.Title)
+		fmt.Printf("    %v\n", post.Description)
+		fmt.Printf("Link: %s\n", post.Url)
 	}
 	return nil
 }

@@ -12,7 +12,8 @@ import (
 )
 
 // postgres://stephen@localhost:5432/gator
-
+// goose postgres postgres://stephen@localhost:5432/gator up
+// goose postgres postgres://stephen@localhost:5432/gator down
 func main() {
 	var newState config.State
 	var commands config.Commands
@@ -37,6 +38,7 @@ func main() {
 	commands.RegisterNewCommand("follow", config.MiddlewareLoggedIn(config.HandleFeedFollow))
 	commands.RegisterNewCommand("following", config.MiddlewareLoggedIn(config.HandleFollowing))
 	commands.RegisterNewCommand("unfollow", config.MiddlewareLoggedIn(config.HandleUnfollow))
+	commands.RegisterNewCommand("browse", config.MiddlewareLoggedIn(config.HandleBrowse))
 	if len(os.Args) < 2 {
 		fmt.Println("need at least two arguments")
 		os.Exit(1)
