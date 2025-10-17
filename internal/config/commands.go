@@ -362,6 +362,7 @@ func HandleBrowse(s *State, cmd Command, user database.User) error {
 		fmt.Printf("--- %s ---\n", post.Title)
 		fmt.Printf("    %v\n", post.Description)
 		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Println()
 	}
 	return nil
 }
