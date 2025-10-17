@@ -225,7 +225,7 @@ func scrapeFeeds(s *State) error {
 			}
 			return fmt.Errorf("error adding posts to database: %v", err)
 		}
-		fmt.Printf("Added %v post from %v to database. It can now be browsed\n", post.Title, nextFeedToFetch.Name)
+		fmt.Printf("Added %v post from %v to database. It can now be browsed.\n", post.Title, nextFeedToFetch.Name)
 	}
 	return nil
 }
