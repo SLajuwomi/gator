@@ -209,7 +209,7 @@ func scrapeFeeds(s *State) error {
 		if err != nil {
 			return fmt.Errorf("parsePublishedAt failed: %v", err)
 		}
-		_, err = s.Db.CreatePosts(context.Background(), database.CreatePostsParams{
+		post, err := s.Db.CreatePosts(context.Background(), database.CreatePostsParams{
 			ID:          uuid.New(),
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -225,6 +225,7 @@ func scrapeFeeds(s *State) error {
 			}
 			return fmt.Errorf("error adding posts to database: %v", err)
 		}
+		fmt.Printf("Added %v post from %v to database. It can now be browsed\n", post.Title, nextFeedToFetch.Name)
 	}
 	return nil
 }
