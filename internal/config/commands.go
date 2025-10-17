@@ -158,7 +158,7 @@ func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 
 func HandleAgg(s *State, cmd Command) error {
 	if len(cmd.Arguments) < 1 {
-		return fmt.Errorf("not enough arguments. expecting go run . agg <time_between_reqs>")
+		return fmt.Errorf("not enough arguments. expecting gator agg <time_between_reqs>")
 	}
 	timeBetweenReqs, err := time.ParseDuration(cmd.Arguments[0])
 	if err != nil {
@@ -282,7 +282,7 @@ func HandleGetAllFeeds(s *State, cmd Command) error {
 
 func HandleFeedFollow(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 1 {
-		return fmt.Errorf("not enough arguments. expecting go run . follow <url>")
+		return fmt.Errorf("not enough arguments. expecting gator follow <url>")
 	}
 	feedToFollow, err := s.Db.GetFeedByURL(context.Background(), cmd.Arguments[0])
 	if err != nil {
@@ -318,7 +318,7 @@ func HandleFollowing(s *State, cmd Command, user database.User) error {
 
 func HandleUnfollow(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 1 {
-		return fmt.Errorf("too few arguments. expected go run . unfollow <feed_url>")
+		return fmt.Errorf("too few arguments. expected gator unfollow <feed_url>")
 	}
 	feed, err := s.Db.GetFeedByURL(context.Background(), cmd.Arguments[0])
 	if err != nil {
