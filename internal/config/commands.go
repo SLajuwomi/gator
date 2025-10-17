@@ -361,7 +361,7 @@ func HandleBrowse(s *State, cmd Command, user database.User) error {
 		fmt.Printf("%s from %s\n", post.PublishedAt.Format("Mon Jan 2"), post.FeedName)
 		fmt.Printf("--- %s ---\n", post.Title)
 		fmt.Printf("    %v\n", post.Description)
-		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Printf("Link: %s\n", post.Url_2)
 		fmt.Println()
 	}
 	return nil
